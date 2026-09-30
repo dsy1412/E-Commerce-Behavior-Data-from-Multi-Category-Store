@@ -1,0 +1,13 @@
+{
+  "training_sessions": 53627,
+  "validation_sessions": 13407,
+  "training_start": "2019-11-02 00:00:42+00:00",
+  "training_end": "2019-11-09 08:21:36+00:00",
+  "validation_start": "2019-11-09 08:21:40+00:00",
+  "validation_end": "2019-11-10 23:52:23+00:00",
+  "training_conversion_rate": 0.01954239468924236,
+  "validation_conversion_rate": 0.01767733273663012,
+  "observation_minutes": 5,
+  "best_model": "logistic_regression",
+  "best_threshold": 0.08202327984106066
+}

@@ -1,0 +1,8 @@
+metric,value
+view_sessions,69453.0
+cart_after_view_sessions,4194.0
+purchase_after_view_sessions,3700.0
+purchase_after_cart_sessions,2040.0
+view_to_cart_rate,0.06038616042503563
+view_to_purchase_rate,0.05327343671259701
+cart_to_purchase_rate,0.4864091559370529

@@ -1,0 +1,13 @@
+{
+  "baseline_rate": 0.21059038344491784,
+  "relative_mde": 0.1,
+  "absolute_mde": 0.0210590383444918,
+  "target_rate": 0.23164942178940964,
+  "alpha": 0.05,
+  "power": 0.8,
+  "sample_size_per_arm": 6096,
+  "total_sample_size": 12192,
+  "observed_eligible_sessions": 1987,
+  "observed_eligible_users": 1643,
+  "observed_converted_users": 346
+}

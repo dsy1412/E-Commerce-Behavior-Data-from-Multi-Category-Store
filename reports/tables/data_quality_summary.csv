@@ -1,0 +1,14 @@
+column,dtype,missing_count,missing_pct,unique_values
+brand,object,0,0.0,2272
+category_code,object,0,0.0,126
+category_id,int64,0,0.0,604
+category_root,object,0,0.0,14
+day_of_week,int8,0,0.0,7
+event_date,datetime64[ns],0,0.0,9
+event_hour,int8,0,0.0,24
+event_time,"datetime64[ns, UTC]",0,0.0,245924
+event_type,object,0,0.0,3
+price,float64,0,0.0,17266
+product_id,int64,0,0.0,40839
+user_id,Int64,0,0.0,31287
+user_session,object,0,0.0,69466

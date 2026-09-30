@@ -1,0 +1,16 @@
+{
+  "rows_before_cleaning": 315530,
+  "rows_after_cleaning": 314953,
+  "missing_event_time_rows": 0,
+  "missing_user_rows": 0,
+  "invalid_event_type_rows": 0,
+  "invalid_price_rows": 417,
+  "exact_duplicate_rows_removed": 160,
+  "users": 31287,
+  "sessions": 69466,
+  "products": 40839,
+  "categories": 604,
+  "brands": 2272,
+  "start_time": "2019-11-02 00:00:42+00:00",
+  "end_time": "2019-11-10 23:59:24+00:00"
+}
