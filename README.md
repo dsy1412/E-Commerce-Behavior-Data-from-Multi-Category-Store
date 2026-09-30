@@ -1,6 +1,6 @@
 # E-Commerce User Behavior Analytics & Conversion Optimization
 
-A resume-ready Product Data Science project built from the public [Kaggle E-Commerce Behavior Data from Multi Category Store dataset](https://www.kaggle.com/datasets/mkechinov/ecommerce-behavior-data-from-multi-category-store). The project moves beyond prediction to define product metrics, diagnose funnel behavior, evaluate segment differences, and propose a powered experiment.
+A Product Data Science project built from the public [Kaggle E-Commerce Behavior Data from Multi Category Store dataset](https://www.kaggle.com/datasets/mkechinov/ecommerce-behavior-data-from-multi-category-store). The project moves beyond prediction to define product metrics, diagnose funnel behavior, evaluate segment differences, and propose a powered experiment.
 
 ## Current verified run
 
@@ -15,6 +15,8 @@ A resume-ready Product Data Science project built from the public [Kaggle E-Comm
 | Best model | logistic_regression |
 | Validation ROC-AUC | 0.819 |
 | Validation average precision | 0.136 |
+| Validation positive rate | 1.77% |
+| Purchases captured in top-risk 10% | 54.0% |
 
 These results are produced from the checked local pipeline run. They are not estimates or placeholders.
 
@@ -32,8 +34,8 @@ These results are produced from the checked local pipeline run. They are not est
 - **Data quality:** validate timestamps, event types, prices, duplicates, missing categories/brands, and missing sessions.
 - **Metrics:** DAU, event depth, purchase frequency, observed purchase value, session funnel, user segments, and D1/D7 observed-window retention.
 - **Prediction:** historical-rate baseline, logistic regression, and LightGBM.
-- **Leakage control:** first-5-minute session features, later-session target, training-only threshold selection, and chronological holdout.
-- **Explainability:** segment diagnostics, probability calibration, and LightGBM SHAP contributions.
+- **Leakage control:** first-5-minute session features, later-session target, user-history features from completed prior sessions only, training-only threshold selection, and chronological holdout.
+- **Explainability:** segment diagnostics, probability calibration, and LightGBM SHAP contributions as a secondary nonlinear-model diagnostic.
 - **Decision layer:** root-cause review plus a user-randomized cart-recovery experiment with MDE, power, guardrails, and rollout stages.
 
 ## Repository structure
@@ -42,7 +44,7 @@ These results are produced from the checked local pipeline run. They are not est
 .
 |-- data/                 # raw files are ignored; placement instructions included
 |-- notebooks/            # guided EDA and modeling walkthrough
-|-- outputs/              # predictions, serialized model, run summaries, resume bullets
+|-- outputs/              # predictions, serialized model, and run summaries
 |-- reports/
 |   |-- figures/          # generated product and modeling charts
 |   `-- tables/           # generated metrics and diagnostics
@@ -71,9 +73,8 @@ Alternatively, download the original files from Kaggle or the [REES46 public dat
 
 - [Product analytics report](reports/product_report.md)
 - [Experiment plan](reports/experiment_plan.md)
-- [Resume bullets](outputs/resume_bullets.md)
 - Figures in `reports/figures/`
-- Model and validation predictions in `outputs/`
+- Model and validation predictions generated locally in `outputs/`
 
 ## Interpretation and limitations
 

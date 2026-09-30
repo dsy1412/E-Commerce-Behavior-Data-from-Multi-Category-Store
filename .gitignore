@@ -12,3 +12,5 @@ data/processed/*
 
 outputs/*.parquet
 outputs/*.joblib
+outputs/resume_bullets.md
+outputs/resume_project.tex

@@ -1,13 +1,13 @@
 {
-  "baseline_rate": 0.21059038344491784,
+  "baseline_rate": 0.1819841752891053,
   "relative_mde": 0.1,
-  "absolute_mde": 0.0210590383444918,
-  "target_rate": 0.23164942178940964,
+  "absolute_mde": 0.01819841752891055,
+  "target_rate": 0.20018259281801584,
   "alpha": 0.05,
   "power": 0.8,
-  "sample_size_per_arm": 6096,
-  "total_sample_size": 12192,
+  "sample_size_per_arm": 7326,
+  "total_sample_size": 14652,
   "observed_eligible_sessions": 1987,
   "observed_eligible_users": 1643,
-  "observed_converted_users": 346
+  "observed_converted_users": 299
 }

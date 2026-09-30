@@ -151,14 +151,77 @@ def _choose_threshold(y_true: pd.Series, probabilities: np.ndarray) -> float:
     return float(thresholds[int(np.nanargmax(scores))])
 
 
+def _top_fraction_metrics(
+    y_true: pd.Series,
+    probabilities: np.ndarray,
+    fraction: float = 0.10,
+) -> dict[str, float | int]:
+    labels = y_true.to_numpy()
+    top_n = max(1, int(np.ceil(len(labels) * fraction)))
+    top_indices = np.argsort(-probabilities, kind="stable")[:top_n]
+    top_positives = int(labels[top_indices].sum())
+    total_positives = int(labels.sum())
+    prevalence = float(labels.mean())
+    if np.unique(probabilities).size == 1:
+        return {
+            "validation_positive_rate": prevalence,
+            "top_10pct_sessions": top_n,
+            "precision_at_10pct": prevalence,
+            "recall_at_10pct": top_n / len(labels),
+            "lift_at_10pct": 1.0,
+        }
+    precision_at_fraction = top_positives / top_n
+    return {
+        "validation_positive_rate": prevalence,
+        "top_10pct_sessions": top_n,
+        "precision_at_10pct": precision_at_fraction,
+        "recall_at_10pct": top_positives / max(total_positives, 1),
+        "lift_at_10pct": precision_at_fraction / max(prevalence, 1e-12),
+    }
+
+
+def _bootstrap_intervals(
+    y_true: pd.Series,
+    probabilities: np.ndarray,
+    random_state: int,
+    iterations: int = 300,
+) -> dict[str, float]:
+    labels = y_true.to_numpy()
+    rng = np.random.default_rng(random_state)
+    roc_values: list[float] = []
+    ap_values: list[float] = []
+    for _ in range(iterations):
+        indices = rng.integers(0, len(labels), size=len(labels))
+        sampled_labels = labels[indices]
+        if np.unique(sampled_labels).size < 2:
+            continue
+        sampled_probabilities = probabilities[indices]
+        roc_values.append(float(roc_auc_score(sampled_labels, sampled_probabilities)))
+        ap_values.append(float(average_precision_score(sampled_labels, sampled_probabilities)))
+    if not roc_values:
+        return {
+            "roc_auc_ci_low": np.nan,
+            "roc_auc_ci_high": np.nan,
+            "average_precision_ci_low": np.nan,
+            "average_precision_ci_high": np.nan,
+        }
+    return {
+        "roc_auc_ci_low": float(np.quantile(roc_values, 0.025)),
+        "roc_auc_ci_high": float(np.quantile(roc_values, 0.975)),
+        "average_precision_ci_low": float(np.quantile(ap_values, 0.025)),
+        "average_precision_ci_high": float(np.quantile(ap_values, 0.975)),
+    }
+
+
 def _evaluate(
     name: str,
     y_true: pd.Series,
     probabilities: np.ndarray,
     threshold: float,
-) -> dict[str, float | str]:
+    random_state: int,
+) -> dict[str, float | int | str]:
     predictions = probabilities >= threshold
-    return {
+    result: dict[str, float | int | str] = {
         "model": name,
         "roc_auc": _safe_auc(y_true, probabilities),
         "average_precision": float(average_precision_score(y_true, probabilities)),
@@ -168,6 +231,9 @@ def _evaluate(
         "brier_score": float(brier_score_loss(y_true, probabilities)),
         "threshold": threshold,
     }
+    result.update(_top_fraction_metrics(y_true, probabilities))
+    result.update(_bootstrap_intervals(y_true, probabilities, random_state))
+    return result
 
 
 def _calibration_table(y_true: pd.Series, probabilities: np.ndarray, bins: int = 10) -> pd.DataFrame:
@@ -272,7 +338,15 @@ def train_conversion_models(
         fitted = clone(candidate)
         fitted.fit(train[MODEL_FEATURES], train[TARGET])
         probabilities = fitted.predict_proba(validation[MODEL_FEATURES])[:, 1]
-        results.append(_evaluate(name, validation[TARGET], probabilities, threshold))
+        results.append(
+            _evaluate(
+                name,
+                validation[TARGET],
+                probabilities,
+                threshold,
+                config.random_state,
+            )
+        )
         fitted_models[name] = fitted
         thresholds[name] = threshold
         validation_probabilities[name] = probabilities

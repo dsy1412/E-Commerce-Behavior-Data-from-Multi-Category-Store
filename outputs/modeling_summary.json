@@ -9,5 +9,5 @@
   "validation_conversion_rate": 0.01767733273663012,
   "observation_minutes": 5,
   "best_model": "logistic_regression",
-  "best_threshold": 0.08202327984106066
+  "best_threshold": 0.08192054874613074
 }

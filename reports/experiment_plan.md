@@ -12,7 +12,7 @@ This is a proposed randomized experiment. The dataset contains no treatment assi
 - **Control:** current shopping experience with no additional reminder.
 - **Treatment:** one reminder showing the most recently carted item and a direct return-to-cart action.
 - **Randomization unit:** user ID, assigned persistently to avoid cross-session contamination.
-- **Primary metric:** user-level purchase conversion within a pre-specified follow-up window.
+- **Primary metric:** user-level purchase conversion within a pre-specified post-randomization window.
 - **Secondary metrics:** observed purchase value per randomized eligible user and time to purchase.
 - **Guardrails:** remove-from-cart rate, notification opt-out rate, page latency, and seven-day user retention. The public schema includes cart-removal events, but production instrumentation is required for the remaining guardrails and should verify that removal events are populated reliably.
 - **Analysis:** intention-to-treat comparison of proportions with a two-sided z-test; report absolute lift, relative lift, 95% confidence interval, and pre-specified segment interactions.
@@ -22,12 +22,12 @@ This is a proposed randomized experiment. The dataset contains no treatment assi
 ## Power calculation
 
 - Observed eligible sessions in the analysis sample: **1,987**
-- Observed eligible users in the analysis sample: **1,643**
-- Observed user-level baseline conversion: **21.06%**
-- Minimum detectable effect: **10% relative** (2.11% absolute)
+- Users represented by their first eligible session: **1,643**
+- Historical later-same-session conversion proxy: **18.20%**
+- Minimum detectable effect: **10% relative** (1.82% absolute)
 - Significance level: **5%**
 - Power: **80%**
-- Required users per arm: **6,096**
-- Required total users: **12,192**
+- Required users per arm: **7,326**
+- Required total users: **14,652**
 
-The baseline is descriptive and sample-specific. Production planning should recompute power using current traffic, expected eligibility, cluster effects from user-level randomization, and the actual business-relevant MDE.
+The historical proxy uses one first eligible session per user and asks whether a purchase occurred later in that same session, so repeat sessions do not inflate the rate. It is not a measured treatment effect or a long-term user conversion rate. Production planning should recompute power using the final outcome window, current traffic, expected eligibility, repeat exposure assumptions, and the actual business-relevant MDE.

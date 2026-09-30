@@ -12,6 +12,34 @@ def _collapse_rare(series: pd.Series, top_n: int) -> pd.Series:
     return values.where(values.isin(keep), "other")
 
 
+def _add_completed_session_history(features: pd.DataFrame) -> pd.DataFrame:
+    """Add user history known before each session starts.
+
+    Some users have overlapping session IDs. Counting all earlier-starting
+    sessions would expose outcomes from sessions that had not finished yet.
+    This implementation only uses sessions whose end timestamp is strictly
+    earlier than the current session start.
+    """
+    outputs: list[pd.DataFrame] = []
+    for _, group in features.groupby("user_id", sort=False, observed=True):
+        group = group.copy()
+        starts = group["session_start"].astype("int64").to_numpy()
+        end_order = np.argsort(group["session_end"].astype("int64").to_numpy())
+        sorted_ends = group["session_end"].astype("int64").to_numpy()[end_order]
+        sorted_targets = group["purchase_after_window"].to_numpy()[end_order]
+        completed_counts = np.searchsorted(sorted_ends, starts, side="left")
+        cumulative_purchases = np.cumsum(sorted_targets)
+        completed_purchases = np.where(
+            completed_counts > 0,
+            cumulative_purchases[np.maximum(completed_counts - 1, 0)],
+            0,
+        )
+        group["prior_sessions"] = completed_counts
+        group["prior_purchase_sessions"] = completed_purchases
+        outputs.append(group)
+    return pd.concat(outputs, ignore_index=True)
+
+
 def build_session_features(
     events: pd.DataFrame,
     config: ProjectConfig,
@@ -30,7 +58,9 @@ def build_session_features(
         minutes=config.observation_minutes
     )
     events = events.merge(
-        session_index[["user_session", "user_id", "session_start", "observation_end"]],
+        session_index[
+            ["user_session", "user_id", "session_start", "session_end", "observation_end"]
+        ],
         on=["user_session", "user_id"],
         how="inner",
     )
@@ -50,6 +80,7 @@ def build_session_features(
     grouped = observed.groupby(["user_session", "user_id"], observed=True)
     features = grouped.agg(
         session_start=("session_start", "first"),
+        session_end=("session_end", "first"),
         observation_end=("observation_end", "first"),
         observed_events=("event_type", "size"),
         view_count=("event_type", lambda values: values.eq("view").sum()),
@@ -103,10 +134,7 @@ def build_session_features(
     features["entry_brand"] = _collapse_rare(features["entry_brand"], top_n=50)
 
     features = features.sort_values(["user_id", "session_start", "user_session"])
-    user_group = features.groupby("user_id", observed=True)
-    features["prior_sessions"] = user_group.cumcount()
-    prior_purchases = user_group["purchase_after_window"].cumsum() - features["purchase_after_window"]
-    features["prior_purchase_sessions"] = prior_purchases.clip(lower=0)
+    features = _add_completed_session_history(features)
     features["prior_conversion_rate"] = (
         features["prior_purchase_sessions"] / features["prior_sessions"].clip(lower=1)
     )

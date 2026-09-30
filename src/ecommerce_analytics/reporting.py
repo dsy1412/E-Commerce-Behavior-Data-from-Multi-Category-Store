@@ -46,16 +46,12 @@ def generate_product_report(
     config: ProjectConfig,
 ) -> None:
     best = modeling.metrics.iloc[0]
-    baseline_ap = float(
-        modeling.metrics.loc[
-            modeling.metrics["model"].eq("historical_rate"), "average_precision"
-        ].iloc[0]
-    )
-    ap_multiple = float(best["average_precision"] / max(baseline_ap, 1e-12))
     high_category = _category_signal(segment_funnels, highest=True)
     low_category = _category_signal(segment_funnels, highest=False)
     d1 = _weighted_retention(retention, 1)
     d7 = _weighted_retention(retention, 7)
+    d1_cohorts = int(retention["horizon_days"].eq(1).sum())
+    d7_cohorts = int(retention["horizon_days"].eq(7).sum())
     repeat_share = float(user_segments["behavior_segment"].eq("repeat purchaser").mean())
     top_driver = modeling.shap_importance.iloc[0]["feature"]
     drops = root_causes.loc[root_causes["period_type"].eq("drop")]
@@ -76,10 +72,12 @@ def generate_product_report(
             "These are descriptive signals for follow-up, not causal category effects."
         )
     retention_text = (
-        f"D1 retention was **{d1:.2%}**" if d1 is not None else "D1 retention was not estimable"
+        f"D1 retention was **{d1:.2%}** across **{d1_cohorts} eligible cohorts**"
+        if d1 is not None
+        else "D1 retention was not estimable"
     )
     retention_text += (
-        f" and D7 retention was **{d7:.2%}** among eligible observed cohorts."
+        f"; D7 retention was **{d7:.2%}** across **{d7_cohorts} eligible cohorts**."
         if d7 is not None
         else "; D7 was not estimable in the available window."
     )
@@ -138,8 +136,10 @@ The user-level rule preserves sampled user journeys better than random row sampl
 The prediction task uses only the first **{config.observation_minutes} minutes** of an eligible session and predicts whether a purchase occurs later in that same session. Sessions with an early purchase are excluded. The final holdout is strictly later in time than training data.
 
 - Best validation model: **{modeling.best_model_name}**
-- ROC-AUC: **{best['roc_auc']:.3f}**
-- Average precision: **{best['average_precision']:.3f}**
+- Holdout sessions / positive rate: **{int(modeling.split_summary['validation_sessions']):,} / {best['validation_positive_rate']:.2%}**
+- ROC-AUC: **{best['roc_auc']:.3f}** (bootstrap 95% CI **{best['roc_auc_ci_low']:.3f}-{best['roc_auc_ci_high']:.3f}**)
+- Average precision: **{best['average_precision']:.3f}** (bootstrap 95% CI **{best['average_precision_ci_low']:.3f}-{best['average_precision_ci_high']:.3f}**)
+- Top-risk 10%: **{best['precision_at_10pct']:.1%} precision**, capturing **{best['recall_at_10pct']:.1%}** of later-session purchases
 - Precision at the training-selected threshold: **{best['precision']:.3f}**
 - Recall at the training-selected threshold: **{best['recall']:.3f}**
 - F1: **{best['f1']:.3f}**
@@ -147,44 +147,23 @@ The prediction task uses only the first **{config.observation_minutes} minutes**
 
 ## Experiment recommendation
 
-Run a user-randomized cart-recovery experiment rather than treating historical cart behavior as causal evidence. Using the sample's observed eligible-session baseline and a 10% relative MDE, the simple two-proportion power calculation requires **{experiment['sample_size_per_arm']:,} users per arm** before traffic and clustering adjustments. See [experiment_plan.md](experiment_plan.md) for the full design and guardrails.
+Run a user-randomized cart-recovery experiment rather than treating historical cart behavior as causal evidence. Using later-same-session purchase after each user's first eligible cart session as a historical proxy and a 10% relative MDE, the simple two-proportion power calculation requires **{experiment['sample_size_per_arm']:,} users per arm**. Production planning must recalculate this using the final outcome window, traffic, and repeat-exposure policy. See [experiment_plan.md](experiment_plan.md) for the full design and guardrails.
 
 ## Limitations
 
-1. The analysis uses a deterministic sample and a continuous subset of the public event stream, not the entire seven-month dataset.
+1. The analysis uses deterministic user-ID buckets and a continuous subset of the public event stream, not the entire seven-month dataset. The bucket sample preserves journeys but is not guaranteed to be population-representative.
 2. A purchase event represents an item event; the data does not provide a verified order identifier, margin, promotion exposure, or product impression denominator.
 3. Observed funnel differences, SHAP values, and segment comparisons are associative. Only a randomized test can establish incremental impact.
 4. Cohort retention is measured from first activity observed inside this window, not true customer acquisition.
 5. User IDs are sampled consistently, but behavior before and after the downloaded time window is unavailable.
 6. A sharp cart-event discontinuity appears during the window. The analysis flags it rather than assuming it represents an organic behavior change.
+7. SHAP values come from the secondary LightGBM candidate, while logistic regression is the selected model. They are included as nonlinear feature diagnostics, not as an explanation of the selected model.
 """
     config.report_path.write_text(report, encoding="utf-8")
 
-    bullets = f"""# Resume Bullets
-
-- Built a reproducible product analytics pipeline over **{quality['rows_after_cleaning']:,} e-commerce events** from **{quality['users']:,} users**, preserving user journeys through deterministic sampling and defining DAU, session funnel, conversion, segmentation, and cohort-retention metrics.
-- Developed a leakage-safe session conversion model using first-{config.observation_minutes}-minute behavior and chronological validation; compared baseline, logistic regression, and LightGBM models, reaching **{best['roc_auc']:.3f} ROC-AUC** and **{best['average_precision']:.3f} average precision ({ap_multiple:.1f}x the historical-rate baseline)**.
-- Diagnosed a **{_funnel_value(funnel, 'view_to_cart_rate'):.2%} view-to-cart rate** and segment-level conversion differences with SHAP and root-cause analysis, then designed a powered user-randomized cart-recovery experiment with explicit metrics and guardrails.
-
-All figures and claims above are generated from the current local run. Re-run the pipeline after changing the data sample before using the numbers externally.
-"""
-    (config.outputs_dir / "resume_bullets.md").write_text(bullets, encoding="utf-8")
-
-    latex = f"""\\vspace{{-10pt}}
-    \\resumeProjectHeading
-      {{\\textbf{{E-Commerce Conversion Analytics \\& Experimentation}} $|$ \\emph{{Python, SQL, LightGBM, SHAP}}}}{{Sept. 2026 -- Present}}
-      \\resumeItemListStart
-      \\vspace{{4pt}}
-        \\resumeItem{{Built a product analytics pipeline over \\textbf{{{quality['rows_after_cleaning']:,} e-commerce events}} from \\textbf{{{quality['users']:,} users}}, preserving user journeys through deterministic sampling and defining DAU, session funnel, conversion, user-segment, and D1/D7 retention metrics}}
-        \\resumeItem{{Developed a leakage-safe session conversion model using first-{config.observation_minutes}-minute behavior and chronological validation, comparing baseline, logistic regression, and LightGBM models to achieve \\textbf{{{best['roc_auc']:.3f} ROC-AUC}} and \\textbf{{{best['average_precision']:.3f} average precision ({ap_multiple:.1f}$\\times$ baseline)}}}}
-        \\resumeItem{{Diagnosed a \\textbf{{{_funnel_value(funnel, 'view_to_cart_rate') * 100:.2f}\\% view-to-cart rate}} and segment-level conversion differences with SHAP and root-cause analysis, then designed a powered user-randomized cart-recovery experiment with explicit success metrics and guardrails}}
-      \\resumeItemListEnd
-"""
-    (config.outputs_dir / "resume_project.tex").write_text(latex, encoding="utf-8")
-
     github_summary = f"""# GitHub Summary
 
-Product Data Science case study on **{quality['rows_after_cleaning']:,} sampled e-commerce events**. The project defines session funnel and retention metrics, builds a leakage-safe conversion model with chronological validation (**{best['roc_auc']:.3f} ROC-AUC; {best['average_precision']:.3f} AP**), explains segment and model behavior with SHAP, and converts observational findings into a powered cart-recovery experiment plan.
+Product Data Science case study on **{quality['rows_after_cleaning']:,} sampled e-commerce events**. The project defines session funnel and retention metrics, builds a leakage-safe conversion model with chronological validation (**{best['roc_auc']:.3f} ROC-AUC; {best['precision_at_10pct']:.1%} precision while capturing {best['recall_at_10pct']:.1%} of purchases in the top-risk 10%**), audits segment and nonlinear model behavior with SHAP, and converts observational findings into a powered cart-recovery experiment plan.
 """
     (config.outputs_dir / "github_summary.md").write_text(github_summary, encoding="utf-8")
 
@@ -199,7 +178,7 @@ def generate_readme(
     best = modeling.metrics.iloc[0]
     readme = f"""# E-Commerce User Behavior Analytics & Conversion Optimization
 
-A resume-ready Product Data Science project built from the public [Kaggle E-Commerce Behavior Data from Multi Category Store dataset](https://www.kaggle.com/datasets/mkechinov/ecommerce-behavior-data-from-multi-category-store). The project moves beyond prediction to define product metrics, diagnose funnel behavior, evaluate segment differences, and propose a powered experiment.
+A Product Data Science project built from the public [Kaggle E-Commerce Behavior Data from Multi Category Store dataset](https://www.kaggle.com/datasets/mkechinov/ecommerce-behavior-data-from-multi-category-store). The project moves beyond prediction to define product metrics, diagnose funnel behavior, evaluate segment differences, and propose a powered experiment.
 
 ## Current verified run
 
@@ -214,6 +193,8 @@ A resume-ready Product Data Science project built from the public [Kaggle E-Comm
 | Best model | {modeling.best_model_name} |
 | Validation ROC-AUC | {best['roc_auc']:.3f} |
 | Validation average precision | {best['average_precision']:.3f} |
+| Validation positive rate | {best['validation_positive_rate']:.2%} |
+| Purchases captured in top-risk 10% | {best['recall_at_10pct']:.1%} |
 
 These results are produced from the checked local pipeline run. They are not estimates or placeholders.
 
@@ -231,8 +212,8 @@ These results are produced from the checked local pipeline run. They are not est
 - **Data quality:** validate timestamps, event types, prices, duplicates, missing categories/brands, and missing sessions.
 - **Metrics:** DAU, event depth, purchase frequency, observed purchase value, session funnel, user segments, and D1/D7 observed-window retention.
 - **Prediction:** historical-rate baseline, logistic regression, and LightGBM.
-- **Leakage control:** first-{config.observation_minutes}-minute session features, later-session target, training-only threshold selection, and chronological holdout.
-- **Explainability:** segment diagnostics, probability calibration, and LightGBM SHAP contributions.
+- **Leakage control:** first-{config.observation_minutes}-minute session features, later-session target, user-history features from completed prior sessions only, training-only threshold selection, and chronological holdout.
+- **Explainability:** segment diagnostics, probability calibration, and LightGBM SHAP contributions as a secondary nonlinear-model diagnostic.
 - **Decision layer:** root-cause review plus a user-randomized cart-recovery experiment with MDE, power, guardrails, and rollout stages.
 
 ## Repository structure
@@ -241,7 +222,7 @@ These results are produced from the checked local pipeline run. They are not est
 .
 |-- data/                 # raw files are ignored; placement instructions included
 |-- notebooks/            # guided EDA and modeling walkthrough
-|-- outputs/              # predictions, serialized model, run summaries, resume bullets
+|-- outputs/              # predictions, serialized model, and run summaries
 |-- reports/
 |   |-- figures/          # generated product and modeling charts
 |   `-- tables/           # generated metrics and diagnostics
@@ -270,9 +251,8 @@ Alternatively, download the original files from Kaggle or the [REES46 public dat
 
 - [Product analytics report](reports/product_report.md)
 - [Experiment plan](reports/experiment_plan.md)
-- [Resume bullets](outputs/resume_bullets.md)
 - Figures in `reports/figures/`
-- Model and validation predictions in `outputs/`
+- Model and validation predictions generated locally in `outputs/`
 
 ## Interpretation and limitations
 

@@ -24,7 +24,7 @@ The user-level rule preserves sampled user journeys better than random row sampl
 - Observed cart-to-purchase session rate: **48.64%**
 - Repeat-purchaser share of sampled users: **1.97%**
 - Mean daily active users in the sample: **5,301**
-- D1 retention was **13.91%** and D7 retention was **11.95%** among eligible observed cohorts.
+- D1 retention was **13.91%** across **8 eligible cohorts**; D7 retention was **11.95%** across **2 eligible cohorts**.
 
 ## Segment and root-cause findings
 
@@ -44,8 +44,10 @@ The user-level rule preserves sampled user journeys better than random row sampl
 The prediction task uses only the first **5 minutes** of an eligible session and predicts whether a purchase occurs later in that same session. Sessions with an early purchase are excluded. The final holdout is strictly later in time than training data.
 
 - Best validation model: **logistic_regression**
-- ROC-AUC: **0.819**
-- Average precision: **0.136**
+- Holdout sessions / positive rate: **13,407 / 1.77%**
+- ROC-AUC: **0.819** (bootstrap 95% CI **0.789-0.847**)
+- Average precision: **0.136** (bootstrap 95% CI **0.106-0.185**)
+- Top-risk 10%: **9.5% precision**, capturing **54.0%** of later-session purchases
 - Precision at the training-selected threshold: **0.180**
 - Recall at the training-selected threshold: **0.266**
 - F1: **0.215**
@@ -53,13 +55,14 @@ The prediction task uses only the first **5 minutes** of an eligible session and
 
 ## Experiment recommendation
 
-Run a user-randomized cart-recovery experiment rather than treating historical cart behavior as causal evidence. Using the sample's observed eligible-session baseline and a 10% relative MDE, the simple two-proportion power calculation requires **6,096 users per arm** before traffic and clustering adjustments. See [experiment_plan.md](experiment_plan.md) for the full design and guardrails.
+Run a user-randomized cart-recovery experiment rather than treating historical cart behavior as causal evidence. Using later-same-session purchase after each user's first eligible cart session as a historical proxy and a 10% relative MDE, the simple two-proportion power calculation requires **7,326 users per arm**. Production planning must recalculate this using the final outcome window, traffic, and repeat-exposure policy. See [experiment_plan.md](experiment_plan.md) for the full design and guardrails.
 
 ## Limitations
 
-1. The analysis uses a deterministic sample and a continuous subset of the public event stream, not the entire seven-month dataset.
+1. The analysis uses deterministic user-ID buckets and a continuous subset of the public event stream, not the entire seven-month dataset. The bucket sample preserves journeys but is not guaranteed to be population-representative.
 2. A purchase event represents an item event; the data does not provide a verified order identifier, margin, promotion exposure, or product impression denominator.
 3. Observed funnel differences, SHAP values, and segment comparisons are associative. Only a randomized test can establish incremental impact.
 4. Cohort retention is measured from first activity observed inside this window, not true customer acquisition.
 5. User IDs are sampled consistently, but behavior before and after the downloaded time window is unavailable.
 6. A sharp cart-event discontinuity appears during the window. The analysis flags it rather than assuming it represents an organic behavior change.
+7. SHAP values come from the secondary LightGBM candidate, while logistic regression is the selected model. They are included as nonlinear feature diagnostics, not as an explanation of the selected model.
